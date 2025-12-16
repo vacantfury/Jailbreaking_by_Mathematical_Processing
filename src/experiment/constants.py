@@ -2,70 +2,39 @@
 Constants for experiment package.
 """
 from pathlib import Path
-import os
-from src.llm_util.llm_model import LLMModel
-import src.clas_jailbreaking_evaluation.constants as clas_constants
-from src.clas_jailbreaking_evaluation.constants import AVAILABLE_EVALUATION_MODELS
-from src.prompt_processor.constants import MODE_KEYS_TO_NAMES
-#############################################
-# GENERAL EXPERIMENT SETTINGS
-#############################################
+from typing import Final
 
-# Project paths
-PROJECT_ROOT = Path(__file__).parent.parent
-INPUT_DIR = PROJECT_ROOT / "input_and_output"
-OUTPUT_DIR = PROJECT_ROOT / "input_and_output"
+from src.data.constants import EXPERIMENT_DATA_DIR, HARMFUL_PROMPTS_FILE
+
+# =============================================================================
+# Directory Paths
+# =============================================================================
+
+# Import base experiment data directory from data.constants
+# All task folders will be created under this directory
+TASK_DATA_DIR: Final[Path] = EXPERIMENT_DATA_DIR
 
 # Ensure directories exist
-os.makedirs(INPUT_DIR, exist_ok=True)
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+TASK_DATA_DIR.mkdir(exist_ok=True, parents=True)
 
-# Default files
-DEFAULT_INPUT_FILE = INPUT_DIR / "input_prompts.jsonl"
-DEFAULT_OUTPUT_FILE = OUTPUT_DIR / "output_prompts.jsonl"
+# =============================================================================
+# Experiment Settings
+# =============================================================================
 
-# Evaluation notebook path
-DEFAULT_EVALUATION_IPYNB_PATH = PROJECT_ROOT / "evaluation" / "evaluate_responses.ipynb"
+# Default task name
+DEFAULT_TASK_NAME: Final[str] = "jailbreaking_by_maths_task"
 
-# Experiment result files
-LLM_RESULTS_FILE = OUTPUT_DIR / "llm_results.jsonl"
-NON_LLM_RESULTS_FILE = OUTPUT_DIR / "non_llm_results.jsonl"
-
+# Default temperature settings
+DEFAULT_TARGET_TEMPERATURE: Final[float] = 1.0  # Higher for creative jailbreak attempts
+DEFAULT_EVALUATOR_TEMPERATURE: Final[float] = 0.0  # Deterministic for consistent evaluation
 
 
-KEY_LLM_EXPERIMENT = "llm_experiment"
-KEY_NON_LLM_EXPERIMENT = "non_llm_experiment"
+# =============================================================================
+# Batch Processing Settings
+# =============================================================================
 
+# Maximum number of prompts to process in one batch
+MAX_PROMPTS_PER_BATCH: Final[int] = 100
 
-
-#############################################
-# NON-LLM EXPERIMENT SETTINGS
-#############################################
-
-
-DEFAULT_NON_LLM_PARAMETERS_LIST = [
-    {
-        "mode_num": 2,
-        "parts_num": 3
-    },
-    {
-        "mode_num": 2,
-        "parts_num": 4
-    },  
-    {
-        "mode_num": 2,
-        "parts_num": 5
-    },
-    {
-        "mode_num": 2,
-        "parts_num": 6
-    }
-]
-
-#############################################
-# LLM EXPERIMENT SETTINGS
-#############################################
-
-# Default LLM models to test
-DEFAULT_LLM_MODELS = [LLMModel.GPT_3_5_TURBO, LLMModel.MISTRAL]
-
+# Maximum number of evaluations in one batch
+MAX_EVALUATIONS_PER_BATCH: Final[int] = 50

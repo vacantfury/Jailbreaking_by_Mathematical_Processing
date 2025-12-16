@@ -1,22 +1,22 @@
-1. Finish the experiments (more non_llm processing methods, llm_processor, more evaluator models) and sumbit jobs to the cluster. LLama3 will be fast on the cluster.
-1. Find the risk ranks of the promtps in the paper and the competition. Try to treat different ranks of prompts by different approach.
-1. Change experiment not to output analysis files.
-1. Check that experiment.math_prompt_experiment.MathPromptExperiment takes the right parameters.
-1. Refactor LLM_processor classes so that each LLMProcessor class can provide a collection of models services.
-1. Complete the experiment of prompt processing by all LLMs using LLM processor list. 
-It should be a method of LLM_processor. I updated codes about LLM processor instance list by AI agent but have not checked the correctness of them.
-2. Use llama to do set theory or other kind of reformating of input prompts.
-2. Try approaches based on probability theory or statistics.
-2. Continue to optimize the experiment module. It is too slow now.
-3. Explore different LLMs (currently Llama 3) in the current evaluation pipeline
-as well as the helper model to generate a score matrix for each LLM_based approach.
-3. Try to add more evaluation methods into this project.
-4. If to optimize sth (parameters or prompts), 
-split datasets like common ml algorithms (k-fold validation? and test set) 
-and avoid data leakage.
-2. Adapt jailbreak_track.ipynb so that it can read input file with empty line.
-(from hugging face? using long chain(?) ?) to replace GPT api.
-3. How should I determine the "system" value in gpt message?
-2. In MathPromptProcessor, develop several math processing methods.
-   The final process() method will be a linear combination of them,
-   where the coefficients can be trained out.
+2. Investigate why llama3 8b will be stuck.
+3. Add more processors of idea prompt injection or adding noise (all kinds, including maths symbols).
+4. Test on more models, claude, llama, gemini.
+1. Learn how to use NeU RC cluster and try Youjia's dataset in strorage space CamJailLLM.
+
+
+
+2. Ask if I can get a group api key or get reimbursed.
+
+
+
+
+1. Look into experiment details to check if sth wrong.
+2. Try to solve the issue that local llama models are too slow.
+
+
+
+
+
+
+2. Consider combine my old data to new data.
+2. Consider integrate the old clas competition evaluation method to the new evaluator class.

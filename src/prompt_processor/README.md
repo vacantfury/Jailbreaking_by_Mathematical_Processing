@@ -1,116 +1,210 @@
-# Prompt Processing
+# Prompt Processor - Clean Strategy Pattern Design
 
-A framework for processing prompts using various techniques including LLMs and rule-based approaches.
+## Architecture
 
-## Overview
+**Simple and extensible design with just 3 components:**
 
-The prompt processing package provides specialized processors for handling prompts with different techniques. Each processor type is implemented in its own file for clarity and maintainability.
+```
+1. PromptProcessor         (ONE unified processor class)
+2. BaseProcessingStrategy  (abstract base for strategies)
+3. Concrete Strategies     (DirectLLMStrategy, SplitReassembleStrategy, etc.)
+```
 
-## Components
+No separate LLM/NonLLM processors needed! The distinction is in the **strategies**, not the processor.
 
-### Base Processor (`base_processor.py`)
+## Quick Start
 
-Base class for all prompt processors with common functionality:
+### LLM-Based Processing
 
-- Loading prompts from input files
-- Saving processed prompts to output files
-- Managing file I/O and error handling
+```python
+from src.prompt_processor import PromptProcessor
+from src.llm_utils import LLMModel
 
-### LLM Processor (`llm_processor.py`)
+# Direct prompting
+processor = PromptProcessor(
+    strategy='direct',
+    model=LLMModel.GPT_4,
+    input_file="prompts.jsonl",
+    output_file="responses.jsonl"
+)
+processor.process_and_save()
 
-Processor for handling prompts using Language Models:
+# Few-shot prompting (with example)
+processor = PromptProcessor(
+    strategy='few_shot',
+    model=LLMModel.GPT_4
+)
+response = processor.process_prompt("Explain recursion")
+```
 
-- Unified interface for all LLM models
-- Direct integration with `llm_service` for API communication
-- Support for custom system messages and examples
-- Flexible prompt formatting options
+### Rule-Based Processing
 
-### Non-LLM Processor (`non_llm_processor.py`)
+```python
+from src.prompt_processor import PromptProcessor
 
-Processor for handling prompts without using language models:
+# Split and reassemble
+processor = PromptProcessor(
+    strategy='split_reassemble',
+    num_parts=6,
+    input_file="harmful.jsonl",
+    output_file="obfuscated.jsonl"
+)
+processor.process_and_save()
 
-- Rule-based and template-based approaches
-- Multiple processing modes (templates, split-reassemble, keywords)
-- Highly customizable for different use cases
-- Deterministic output (unlike LLMs)
+# Conditional probability
+processor = PromptProcessor(
+    strategy='conditional_probability',
+    num_parts=5
+)
+result = processor.process_prompt("How to secure a network")
+```
+
+## Built-in Strategies
+
+### LLM Strategies
+- **`direct`**: Direct prompting (no modifications)
+- **`few_shot`**: With example for few-shot learning
+
+### Rule-Based Strategies
+- **`split_reassemble`**: Mathematical summation notation
+- **`conditional_probability`**: Probability equation format
+
+## Adding a New Strategy
+
+Just create a new strategy class and register it:
+
+```python
+from src.prompt_processor import BaseProcessingStrategy, register_strategy
+
+class MyCustomStrategy(BaseProcessingStrategy):
+    """My custom transformation strategy."""
+    
+    def __init__(self, my_param: int = 10):
+        self.my_param = my_param
+    
+    def process(self, prompt: str, **kwargs) -> str:
+        """Transform the prompt."""
+        return f"Custom[{self.my_param}]: {prompt}"
+    
+    # Optional: for efficient batch processing
+    def supports_batch_processing(self) -> bool:
+        return False  # True if you implement batch_process()
+
+# Register it
+register_strategy('my_custom', MyCustomStrategy)
+
+# Use it
+processor = PromptProcessor(strategy='my_custom', my_param=20)
+```
+
+That's it! No need to modify PromptProcessor or any other files.
+
+## Key Features
+
+### 1. Single Processor Class
+- ONE `PromptProcessor` for all use cases
+- Handles I/O, batching, parallelization
+- Delegates processing to strategies
+
+### 2. Strategy Pattern
+- Easy to add new strategies (just inherit and register)
+- No enums needed (string-based registry)
+- Can mix LLM and non-LLM strategies
+
+### 3. Automatic Optimization
+- LLM strategies: Use native batch APIs
+- Rule-based strategies: Automatic parallel processing (10+ prompts)
+- Small batches: Sequential processing (fast enough)
+
+### 4. Flexible Creation
+```python
+# By name (with parameters)
+processor = PromptProcessor(strategy='direct', model=LLMModel.GPT_4)
+
+# Using factory
+from src.prompt_processor import create_strategy
+strategy = create_strategy('split_reassemble', num_parts=8)
+processor = PromptProcessor(strategy=strategy)
+
+# Custom instance
+strategy = MyCustomStrategy(my_param=20)
+processor = PromptProcessor(strategy=strategy)
+```
 
 ## File Structure
 
 ```
-prompt_processing/
-├── __init__.py             # Package exports
-├── base_processor.py       # Base PromptProcessor class
-├── llm_processor.py        # LLMProcessor implementation
-├── non_llm_processor.py    # NonLLMProcessor implementation
-├── processor.py            # Legacy imports for backward compatibility
-└── constants.py            # Shared constants and configurations
+prompt_processor/
+├── __init__.py                # Exports
+├── prompt_processor.py        # PromptProcessor class (orchestration & I/O)
+├── processing_strategies.py   # All strategies (base + concrete)
+├── constants.py              # Shared constants
+└── README.md                 # This file
 ```
 
-## Usage
+**That's it! Just 4 files total.** 🎯
 
-### LLM Processor
+## Benefits
 
+✅ **Simple**: One processor class, strategies are plugins  
+✅ **Extensible**: Add strategies without modifying existing code  
+✅ **Clean**: No LLM/NonLLM split in processor hierarchy  
+✅ **Flexible**: Strategies can be LLM-based, rule-based, or hybrid  
+✅ **Efficient**: Automatic optimization (batch, parallel)  
+✅ **No boilerplate**: No enums, no factory classes  
+
+## Examples
+
+### Batch Processing
 ```python
-from prompt_processing.llm_processor import LLMProcessor
-from llm_util.llm_model import LLMModel
+processor = PromptProcessor(strategy='direct', model=LLMModel.GPT_4)
 
-# Create a processor for a specific model
-processor = LLMProcessor(
-    model=LLMModel.GPT_3_5_TURBO,
-    input_file="input.jsonl",
-    output_file="output.jsonl"
-)
+# Process list directly
+prompts = ["Prompt 1", "Prompt 2", "Prompt 3"]
+responses = processor.batch_process(prompts)
 
-# Process a single prompt
-response = processor.process_prompt("Explain the concept of recursion.")
-print(response)
-
-# Process all prompts from the input file and save results
+# Process from file
 processor.process_and_save()
 ```
 
-### Non-LLM Processor
-
+### Custom Parameters
 ```python
-from prompt_processing.non_llm_processor import NonLLMProcessor
+# Rule-based with custom num_parts
+processor = PromptProcessor(strategy='split_reassemble', num_parts=8)
 
-# Create a processor with template mode
-template_processor = NonLLMProcessor(
-    mode=1,  # Template mode
-    input_file="input.jsonl",
-    output_file="template_output.jsonl"
+# LLM with custom temperature
+processor = PromptProcessor(
+    strategy='direct',
+    model=LLMModel.GPT_4,
+    temperature=0.3,
+    max_tokens=1000
 )
-
-# Create a processor with split-reassemble mode
-split_processor = NonLLMProcessor(
-    mode=2,  # Split-reassemble mode
-    num_parts=3,
-    input_file="input.jsonl",
-    output_file="split_output.jsonl"
-)
-
-# Process prompts with different modes
-template_response = template_processor.process_prompt("How to create a secure password")
-split_response = split_processor.process_prompt("How to create a secure password")
-
-# Process with a specific mode and save
-template_processor.process_and_save()
 ```
 
-## Integration with Other Packages
+### List Available Strategies
+```python
+from src.prompt_processor import list_strategies
 
-The prompt processing package is designed to work seamlessly with:
+print(list_strategies())
+# ['direct', 'few_shot', 'split_reassemble', 'conditional_probability']
+```
 
-- `llm_util`: Provides the LLM models and service for API communication
-- `experiment`: Handles running experiments with multiple processors
+## Migration from Old Design
 
-## Design Philosophy
+**Old**:
+```python
+from src.prompt_processor import LLMProcessor, NonLLMProcessor
 
-Each processor type has been isolated into its own file to:
+llm = LLMProcessor(model=GPT_4, use_example=True)
+non_llm = NonLLMProcessor(mode=1, num_parts=6)
+```
 
-1. Improve readability and maintainability
-2. Allow for easier extension and customization
-3. Enable independent development and testing
-4. Support clearer separation of concerns
+**New**:
+```python
+from src.prompt_processor import PromptProcessor
 
-The package maintains a clean, hierarchical design with a base class (`PromptProcessor`) and specialized implementations for different processing strategies. 
+llm = PromptProcessor(strategy='few_shot', model=GPT_4)
+non_llm = PromptProcessor(strategy='split_reassemble', num_parts=6)
+```
+
+Much cleaner! Same functionality, simpler API. ✨

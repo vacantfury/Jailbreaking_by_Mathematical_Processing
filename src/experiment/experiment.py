@@ -1,190 +1,230 @@
-import json
-import os
-import datetime
-import logging
-from typing import List, Dict, Any, Optional, Tuple, Union
+"""
+Experiment class for managing and executing multiple experiment tasks.
+
+An Experiment can contain multiple Tasks, each with their own configuration.
+Tasks are executed in order (queue-based execution).
+"""
+from typing import List, Dict, Any
+from collections import deque
+
+from src.utils.logger import get_logger
+from .task import Task
+
+logger = get_logger(__name__)
 
 
-import src.experiment.constants as constants
-from src.prompt_processor.llm_processor import LLMProcessor
-from src.prompt_processor.non_llm_processor import NonLLMProcessor
-from src.llm_util.llm_model import LLMModel
-from src.clas_jailbreaking_evaluation.score_calculator import ScoreCalculator
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+def _execute_task_safe(task_data):
+    """
+    Helper function to execute a task safely, catching exceptions.
+    Must be at module level for multiprocessing pickling.
+    
+    Args:
+        task_data: Tuple or dict containing task configuration, NOT the initialized Task object.
+                   We'll rely on the Task class having a lazy initialization or we'll reconstruction it here.
+                   actually, to avoid changing Task class too much, let's assume we pass the Task object
+                   BUT the Task class must be modified to be pickleable (lazy init).
+                   
+                   If we can't change Task easily, we'll assume task_data is a dict of kwargs for Task().
+    """
+    try:
+        # If input is a dict (config), recreate Task
+        if isinstance(task_data, dict):
+             # Import here to avoid circular imports at top level if any
+            from src.experiment.task import Task
+            task = Task(**task_data)
+        else:
+            task = task_data
+
+        logger.info(f"Starting task: {task.name}")
+        return task.run_task()
+    except Exception as e:
+        task_name = task_data.get('name', 'unknown') if isinstance(task_data, dict) else getattr(task_data, 'name', 'unknown')
+        logger.error(f"Error executing task '{task_name}': {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {
+            'task_name': task_name,
+            'error': str(e),
+            'status': 'failed'
+        }
+
 
 class Experiment:
-    """Experiment class for running prompt processing experiments."""
-
+    """
+    Experiment class for managing multiple experiment tasks.
+    
+    An Experiment orchestrates multiple Tasks, each representing a unit experiment
+    with specific configuration (input data, processing strategy, target model, etc.).
+    
+    Tasks can be added to the front or tail of the execution queue.
+    """
+    
     def __init__(self):
+        """Initialize the experiment."""
+        self.tasks: deque[Task] = deque()
+        self.results: List[Dict[str, Any]] = []
+    
+    def add_task_to_front(self, task: Task):
         """
-        Initialize the experiment.
-
-        Args:
-            name: Name of the experiment
-        """
-        self.score_calculator = ScoreCalculator()
-        self.results = {}
-        
-        # Configure logging
-        logging.basicConfig(level=logging.INFO)
-        
-        logger.info(f"Initialized experiment")
-
-    def do_LLM_experiment(self, models: List[LLMModel] = constants.DEFAULT_LLM_MODELS) -> Dict[str, Any]:
-        """
-        Run an LLM experiment for each model and save results.
+        Add a task to the front of the execution queue (will execute first).
         
         Args:
-            models: List of LLM models to test
-            
+            task: Task instance to add
+        """
+        self.tasks.appendleft(task)
+        logger.info(f"Added task '{task.name}' to front of queue (total: {len(self.tasks)} tasks)")
+    
+    def add_task_to_tail(self, task: Task):
+        """
+        Add a task to the tail of the execution queue (will execute last).
+        
+        Args:
+            task: Task instance to add
+        """
+        self.tasks.append(task)
+        logger.info(f"Added task '{task.name}' to tail of queue (total: {len(self.tasks)} tasks)")
+    
+    def run_experiment(self, num_of_tasks: int = None, parallel_tasks: bool = False) -> List[Dict[str, Any]]:
+        """
+        Execute tasks in the queue in order.
+        
+        Args:
+            num_of_tasks: Number of tasks to execute. If None, execute all tasks.
+            parallel_tasks: If True, execute tasks in parallel using multiprocessing.
+                           (Note: Prompt processing within tasks will be sequential).
+        
         Returns:
-            Dictionary with experiment results
+            List of all task results
         """
+        if not self.tasks:
+            logger.warning("No tasks to execute")
+            return []
         
-        # Run experiments for each model
-        all_results = []
+        # Determine how many tasks to run
+        if num_of_tasks is None:
+            task_count = len(self.tasks)
+        else:
+            task_count = min(num_of_tasks, len(self.tasks))
         
-        for model in models:
-            # Create a processor for this model
-            processor = LLMProcessor(
-                model=model,
-                input_file=constants.DEFAULT_INPUT_FILE,
-                output_file=constants.DEFAULT_OUTPUT_FILE
+        logger.info(f"\n{'='*70}")
+        logger.info(f"Total tasks to execute: {task_count}")
+        if parallel_tasks:
+            logger.info("Execution Mode: PARALLEL TASKS (Sequential Prompts)")
+        else:
+            logger.info("Execution Mode: SEQUENTIAL TASKS")
+        logger.info(f"{'='*70}\n")
+        
+        self.results = []
+        
+        # Prepare tasks for execution
+        tasks_to_run = [self.tasks.popleft() for _ in range(task_count)]
+        
+        if parallel_tasks:
+            from src.utils.multiprocessor import parallel_map
+            
+            # Execute tasks in parallel
+            # We don't force sequential here, so it uses multiprocessing
+            # But prompt processing IS forced sequential in BaseProcessor
+            self.results = parallel_map(
+                _execute_task_safe,
+                tasks_to_run,
+                task_type="cpu",
+                show_progress=True,
+                handle_errors="collect"  # Collect results/errors safely
             )
             
-            # Process prompts with this model
-            processed_prompts = processor.process_and_save()
+            # Unpack results if handle_errors was 'collect'
+            # parallel_map returns [(result, error), ...] when collect is used
+            # But strict implementation might return list of results if error=None
+            # Let's check the implementation logic or simplify.
+            # safe parallel_map as implemented in multiprocessor:
+            # if handle_errors="collect", returns (result, error)
             
-            # Calculate jailbreak and stealthiness scores if jailbreak evaluation is available
-            scores = None
-            
-            if self.jailbreak_evaluation_available and self.score_calculator and processed_prompts:
-                logger.info(f"Evaluating with model: {self.score_calculator.model_id}")
-                try:
-                    # Use the calculator's built-in scoring method and store results directly
-                    scores = self.score_calculator.calculate_all_scores(
-                        input_prompts_path=constants.DEFAULT_INPUT_FILE,
-                        output_prompts_path=constants.DEFAULT_OUTPUT_FILE
-                    )
-                    logger.info(f"Scores: {scores}")
-                except Exception as e:
-                    logger.error(f"Error evaluating: {str(e)}")
-            
-            # Create a result record
-            result = {
-                "model": model.value,
-                "prompts_processed": len(processed_prompts),
-                "jailbreak_evaluation_available": self.jailbreak_evaluation_available,
-                "evaluation_model": self.score_calculator.model_id if self.score_calculator else None
-            }
-            
-            # Add scores if available
-            if scores:
-                result.update(scores)
-            
-            # Add to results
-            all_results.append(result)
-        
-        # Store results in memory for potential future use
-        combined_results = {
-            "results": all_results,
-            "jailbreak_evaluation_available": self.jailbreak_evaluation_available
-        }
-        self.results[constants.KEY_LLM_EXPERIMENT] = combined_results
-        
-        # Save each result as a separate JSON line
-        save_path = constants.LLM_RESULTS_FILE
-        # Open in write mode to overwrite previous results
-        with open(save_path, "w") as f:
-            for result in all_results:
-                f.write(json.dumps(result) + "\n")
-        
-        logger.info(f"LLM experiment completed and results saved to {save_path}")
-        return combined_results
+            # Re-process results to match expected format
+            final_results = []
+            for item in self.results:
+                if isinstance(item, tuple) and len(item) == 2:
+                    res, err = item
+                    if res:
+                        final_results.append(res)
+                    elif err:
+                        # Error caught by worker wrapper but not handled by _execute_task_safe?
+                        # actually _execute_task_safe catches exceptions and returns a dict
+                        # so usually err is None unless _execute_task_safe failed to catch
+                        logger.error(f"Task failed with error: {err}")
+                else:
+                    final_results.append(item)
+            self.results = final_results
 
-    def do_non_llm_experiment_and_save(self, non_llm_parameters_list: List[Dict[str, Any]] = constants.DEFAULT_NON_LLM_PARAMETERS_LIST) -> Dict[str, Any]:
-        """
-        Run the non-LLM experiment with specified modes and parts and save results.
-        
-        Args:
-            non_llm_parameters_list: List of dictionaries containing mode and parts configurations to test
-            
-        Returns:
-            Dictionary with experiment results
-        """
-        # Run experiments for each configuration in the list
-        all_results = []
-        
-        for non_llm_parameters in non_llm_parameters_list:
-            # Create a processor for this configuration
-            processor = NonLLMProcessor(
-                input_file=constants.DEFAULT_INPUT_FILE,
-                output_file=constants.DEFAULT_OUTPUT_FILE
-            )
-            
-            # Process prompts with this configuration
-            processed_prompts = processor.process_and_save(non_llm_parameters=non_llm_parameters)
-            
-            # Calculate scores using the score calculator if available
-            scores = None
-            
-            if processed_prompts:
-                logger.info(f"Evaluating with model: {self.score_calculator.model_id}")
+        else:
+            # Execute tasks in order (Sequential)
+            for i, task in enumerate(tasks_to_run):
+                logger.info(f"\n{'~'*70}")
+                logger.info(f"Executing Task {i+1}/{task_count}: {task.name}")
+                logger.info(f"{'~'*70}\n")
+                
                 try:
-                    # Use the calculator's built-in scoring method and store results directly
-                    scores = self.score_calculator.calculate_all_scores(
-                        input_prompts_path=constants.DEFAULT_INPUT_FILE,
-                        output_prompts_path=constants.DEFAULT_OUTPUT_FILE
-                    )
-                    logger.info(f"Scores: {scores}")
+                    task_result = task.run_task()
+                    self.results.append(task_result)
                 except Exception as e:
-                    logger.error(f"Error evaluating: {str(e)}")
-            
-            # Create a result record with detailed information
-            result = {
-                "prompts_processed": len(processed_prompts),
-                "evaluation_model": self.score_calculator.model_id if self.score_calculator else None
-            }
-            
-            # Add the whole non_llm_parameters to the result
-            result.update(non_llm_parameters)
-            
-            # Add scores if available
-            if scores:
-                result.update(scores)
-            
-            # Add to results
-            all_results.append(result)
-            
-            # Print detailed information about this result
-            logger.info(f"Completed processing for parts: {non_llm_parameters}")
-            logger.info(f"  Prompts processed: {len(processed_prompts)}")
-            if scores:
-                logger.info(f"  Final score: {scores.get('final_score', 0.0):.4f}")
+                    logger.error(f"Error executing task '{task.name}': {e}")
+                    import traceback
+                    logger.error(traceback.format_exc())
+                    # Store error result
+                    self.results.append({
+                        'task_name': task.name,
+                        'error': str(e),
+                        'status': 'failed'
+                    })
         
-        # Store results in memory
-        combined_results = {
-            "results": all_results,
-        }
-        self.results[constants.KEY_NON_LLM_EXPERIMENT] = combined_results
+        # Print overall summary
+        self._print_experiment_summary()
         
-        # Save each result as a separate JSON line
-        save_path = constants.NON_LLM_RESULTS_FILE
-        # Open in write mode to overwrite previous results
-        with open(save_path, "w") as f:
-            for result in all_results:
-                f.write(json.dumps(result) + "\n")
+        return self.results
+    
+    def _print_experiment_summary(self):
+        """Print overall experiment summary."""
+        logger.info(f"\n{'='*70}")
+        logger.info(f"EXPERIMENT SUMMARY")
+        logger.info(f"{'='*70}")
+        logger.info(f"Total tasks executed: {len(self.results)}")
         
-        logger.info(f"Non-LLM experiment completed and results saved to {save_path}")
-        logger.info(f"Results include {len(all_results)} configurations")
+        # Count successes and failures
+        successful = sum(1 for r in self.results if r.get('status') != 'failed')
+        failed = len(self.results) - successful
         
-        return combined_results
-  
-
+        logger.info(f"Successful: {successful}")
+        if failed > 0:
+            logger.info(f"Failed: {failed}")
+        
+        # Aggregate statistics
+        total_prompts = sum(r.get('num_prompts', 0) for r in self.results if r.get('num_prompts'))
+        logger.info(f"Total prompts processed: {total_prompts}")
+        
+        # Calculate average obedience across all tasks
+        all_obedience_scores = []
+        for task_result in self.results:
+            if task_result.get('results'):
+                for r in task_result['results']:
+                    if r.get('obedience_evaluation') and r['obedience_evaluation'].get('obedience_score') is not None:
+                        all_obedience_scores.append(r['obedience_evaluation']['obedience_score'])
+        
+        if all_obedience_scores:
+            avg_overall_obedience = sum(all_obedience_scores) / len(all_obedience_scores)
+            logger.info(f"Overall Average Obedience Score: {avg_overall_obedience:.3f}")
+        
+        logger.info(f"{'='*70}\n")
+    
+    def get_task_count(self) -> int:
+        """Get the number of tasks in the queue."""
+        return len(self.tasks)
+    
+    def clear_tasks(self):
+        """Clear all tasks from the queue."""
+        self.tasks.clear()
+        logger.info("Cleared all tasks from queue")
+    
+    def __repr__(self) -> str:
+        return f"Experiment(tasks={len(self.tasks)})"
 
