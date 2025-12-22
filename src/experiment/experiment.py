@@ -123,12 +123,12 @@ class Experiment:
         tasks_to_run = [self.tasks.popleft() for _ in range(task_count)]
         
         if parallel_tasks:
-            from src.utils.multiprocessor import parallel_map
+            from src.utils.multiprocessor import multiprocess_run
             
             # Execute tasks in parallel
             # We use handle_errors="raise" to support fatal termination
             # But specific task errors are swallowed by _execute_task_safe unless they are FatalModelError
-            self.results = parallel_map(
+            self.results = multiprocess_run(
                 _execute_task_safe,
                 tasks_to_run,
                 task_type="cpu",

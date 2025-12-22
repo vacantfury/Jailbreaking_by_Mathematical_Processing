@@ -46,6 +46,7 @@ dependency_bug_fix/
 nu_rc_cluster_files/
 my_old_data_and_experiments/
 experiment_data/
+src/data/original_datasets/
 paper/
 final_update_paper.py
 

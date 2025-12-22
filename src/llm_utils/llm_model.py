@@ -33,7 +33,8 @@ class LLMModel(Enum):
     GPT_O3 = ("gpt-o3", Provider.OPENAI)
     GPT_O4_MINI = ("gpt-o4-mini", Provider.OPENAI)
     GPT_5 = ("gpt-5", Provider.OPENAI)
-    GPT_5_MINI    # Validated with verify_google_models.py
+    GPT_5_MINI = ("gpt-5-mini", Provider.OPENAI)
+    GPT_5_NANO = ("gpt-5-nano", Provider.OPENAI)
     GEMINI_FLASH = ("gemini-2.0-flash-exp", Provider.GOOGLE)
     GEMINI_PRO = ("gemini-2.0-pro-exp", Provider.GOOGLE)  # Verified available
     
@@ -44,7 +45,6 @@ class LLMModel(Enum):
     CLAUDE_3_7_SONNET = ("claude-3-7-sonnet-20250219", Provider.ANTHROPIC) # Verified available
     
     # Placeholder for generic GPT-4 Nano if needed
-    GPT_4_NANO = ("gpt-4-nano", Provider.OPENAI)
     CLAUDE_4_1_OPUS = ("claude-3-opus-20240229", Provider.ANTHROPIC) # Replaced latest
     CLAUDE_4_5_SONNET = ("claude-3-5-sonnet-20241022", Provider.ANTHROPIC) # Replaced latest
     # cheapest among the newest claude models

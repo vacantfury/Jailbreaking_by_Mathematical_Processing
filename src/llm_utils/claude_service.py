@@ -13,7 +13,7 @@ from .constants import (
     DEFAULT_MAX_TOKENS,
 )
 from ..utils.logger import get_logger
-from ..utils import parallel_map
+from ..utils import multiprocess_run
 from ..utils.constants import PARALLEL_PROCESSING_THRESHOLD
 
 logger = get_logger(__name__)
@@ -163,7 +163,7 @@ class ClaudeService(BaseLLMService):
         # Use parallel processing for CPU-bound preparation
         from functools import partial
         prepare_func = partial(self._prepare_prompt, system_message=system_message)
-        return parallel_map(
+        return multiprocess_run(
             prepare_func,
             prompts,
             task_type="cpu"
@@ -192,7 +192,7 @@ class ClaudeService(BaseLLMService):
             return [self._prepare_conversation(c) for c in conversations]
         
         # Use parallel processing for CPU-bound preparation (especially image encoding)
-        return parallel_map(
+        return multiprocess_run(
             self._prepare_conversation,
             conversations,
             task_type="cpu"

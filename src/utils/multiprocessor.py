@@ -40,66 +40,52 @@ def _worker_wrapper(func: Callable, item: Any, *args, **kwargs) -> Tuple[Any, Op
         return (None, error_msg)
 
 
-def parallel_map(
+def multiprocess_run(
     func: Callable,
-    items: List[Any],
+    main_list: List[Any],
     task_type: str = "cpu",
     chunk_size: Optional[int] = None,
-    timeout: Optional[int] = None,
+    timeout: Optional[int] = DEFAULT_WORKER_TIMEOUT,
     show_progress: bool = SHOW_MULTIPROCESS_PROGRESS,
     handle_errors: str = "raise",
     sequential: bool = False,
+    **kwargs
 ) -> List[Any]:
     """
     Execute a function on a list of items in parallel using multiprocessing.
     
-    This function distributes the items across multiple worker processes and collects
-    the results in order. It's optimized for M4 chip with 48GB RAM.
-    Worker count is automatically determined based on task type and number of items.
-    
     Args:
-        func: Function to execute. Should take an item from items as first argument.
-              Use functools.partial to pass additional arguments.
-        items: List of items to process in parallel.
-        task_type: Type of task - "cpu" for CPU-bound (default), "io" for I/O-bound.
-        chunk_size: Size of chunks for imap. Defaults to auto-calculated value.
-        timeout: Timeout in seconds for worker processes. Defaults to DEFAULT_WORKER_TIMEOUT.
-        show_progress: Whether to show progress (prints to console).
-        handle_errors: How to handle errors. Options:
-            - "raise": Raise exception on first error (default)
-            - "skip": Skip failed items and continue
-            - "collect": Collect errors and return them with results
-        sequential: If True, force sequential execution in the current process.
-    
-    Returns:
-        List of results in the same order as items.
-        If handle_errors="collect", returns list of tuples: (result, error_message)
-    
-    Example:
-        >>> from functools import partial
-        >>> def process_item(item, multiplier=2):
-        ...     return item * multiplier
-        >>> items = [1, 2, 3, 4, 5]
-        >>> func = partial(process_item, multiplier=3)
-        >>> results = parallel_map(func, items)
-        >>> print(results)
-        [3, 6, 9, 12, 15]
-    
-    Raises:
-        ValueError: If items list is empty or invalid parameters
-        Exception: If handle_errors="raise" and a worker fails
+        func: Function to execute. Should take an item from main_list as first argument.
+        main_list: List of items to process in parallel.
+        task_type: Type of task - "cpu" (default) or "io"
+        chunk_size: Size of chunks for imap. Defaults to None (auto-calculated).
+        timeout: Timeout in seconds. Defaults to DEFAULT_WORKER_TIMEOUT.
+        show_progress: Whether to show progress. Defaults to SHOW_MULTIPROCESS_PROGRESS.
+        handle_errors: How to handle errors: "raise" (default), "skip", or "collect".
+        sequential: Force sequential execution. Defaults to False.
+        **kwargs: Additional arguments, e.g., num_workers override.
     """
-    if not items:
+    # Extract extra config from kwargs if any
+    manual_workers = kwargs.get("num_workers", None)
+
+    if not main_list:
         return []
+
+    # Check if we are already in a daemon process (nested pool is not allowed)
+    # This prevents "AssertionError: daemonic processes are not allowed to have children"
+    if mp.current_process().daemon and not sequential:
+        # if show_progress:
+        #     print(f"Running in daemon process (worker), forcing sequential execution for {len(main_list)} items...")
+        sequential = True
 
     # Check for sequential execution request
     if sequential:
         if show_progress:
-            print(f"Processing {len(items)} items sequentially (forced)...")
+            print(f"Processing {len(main_list)} items sequentially (forced)...")
         results = []
-        for i, item in enumerate(items):
-            if show_progress and len(items) > 1 and (i + 1) % max(1, len(items) // 10) == 0:
-                print(f"  Progress: {i+1}/{len(items)}")
+        for i, item in enumerate(main_list):
+            if show_progress and len(main_list) > 1 and (i + 1) % max(1, len(main_list) // 10) == 0:
+                print(f"  Progress: {i+1}/{len(main_list)}")
             
             result, error = _worker_wrapper(func, item)
             
@@ -108,7 +94,6 @@ def parallel_map(
                     raise RuntimeError(f"Error processing item {i}: {error}")
                 elif handle_errors == "collect":
                     results.append((result, error))
-                # If "skip", do nothing
             else:
                 if handle_errors == "collect":
                     results.append((result, None))
@@ -117,16 +102,16 @@ def parallel_map(
         return results
     
     # Automatically determine optimal number of workers
-    num_workers = get_optimal_worker_count(len(items), task_type=task_type)
+    num_workers = get_optimal_worker_count(len(main_list), task_type=task_type, max_workers=manual_workers)
     
     # Use single process if only one item or one worker
-    if len(items) == 1 or num_workers == 1:
+    if len(main_list) == 1 or num_workers == 1:
         if show_progress:
-            print(f"Processing {len(items)} items sequentially...")
+            print(f"Processing {len(main_list)} items sequentially...")
         results = []
-        for i, item in enumerate(items):
-            if show_progress and len(items) > 1:
-                print(f"  Progress: {i+1}/{len(items)}")
+        for i, item in enumerate(main_list):
+            if show_progress and len(main_list) > 1:
+                print(f"  Progress: {i+1}/{len(main_list)}")
             result, error = _worker_wrapper(func, item)
             if error and handle_errors == "raise":
                 raise RuntimeError(f"Error processing item {i}: {error}")
@@ -138,14 +123,14 @@ def parallel_map(
     
     # Determine chunk size
     if chunk_size is None:
-        chunk_size = max(1, len(items) // (num_workers * 4))
+        chunk_size = max(1, len(main_list) // (num_workers * 4))
         chunk_size = min(chunk_size, DEFAULT_CHUNK_SIZE)
     
     if timeout is None:
         timeout = DEFAULT_WORKER_TIMEOUT
     
     if show_progress:
-        print(f"Processing {len(items)} items with {num_workers} workers (chunk_size={chunk_size})...")
+        print(f"Processing {len(main_list)} items with {num_workers} workers (chunk_size={chunk_size})...")
     
     # Create partial function with wrapper
     worker_func = partial(_worker_wrapper, func)
@@ -160,9 +145,9 @@ def parallel_map(
     try:
         pool = ctx.Pool(processes=num_workers)
         # Use imap for better memory efficiency with large lists
-        for i, (result, error) in enumerate(pool.imap(worker_func, items, chunksize=chunk_size)):
-            if show_progress and (i + 1) % max(1, len(items) // 10) == 0:
-                print(f"  Progress: {i+1}/{len(items)}")
+        for i, (result, error) in enumerate(pool.imap(worker_func, main_list, chunksize=chunk_size)):
+            if show_progress and (i + 1) % max(1, len(main_list) // 10) == 0:
+                print(f"  Progress: {i+1}/{len(main_list)}")
             
             if error:
                 errors_occurred = True
@@ -171,7 +156,7 @@ def parallel_map(
                     raise RuntimeError(f"Error processing item {i}: {error}")
                 elif handle_errors == "collect":
                     results.append((result, error))
-                # If "skip", just don't append anything
+                # If "skip", do nothing
             else:
                 if handle_errors == "collect":
                     results.append((result, None))
@@ -199,61 +184,11 @@ def parallel_map(
     
     if show_progress:
         if errors_occurred and handle_errors != "raise":
-            print(f"Completed with some errors. Processed {len(results)}/{len(items)} items.")
+            print(f"Completed with some errors. Processed {len(results)}/{len(main_list)} items.")
         else:
             print(f"Completed processing {len(results)} items.")
     
     return results
-
-
-def parallel_starmap(
-    func: Callable,
-    args_list: List[Tuple],
-    num_workers: Optional[int] = None,
-    chunk_size: Optional[int] = None,
-    timeout: Optional[int] = None,
-    show_progress: bool = SHOW_MULTIPROCESS_PROGRESS,
-) -> List[Any]:
-    """
-    Execute a function with multiple argument tuples in parallel.
-    
-    Similar to parallel_map but each item in args_list is a tuple of arguments
-    that will be unpacked when calling func.
-    
-    Args:
-        func: Function to execute.
-        args_list: List of argument tuples for func.
-        num_workers: Number of worker processes.
-        chunk_size: Size of chunks for imap.
-        timeout: Timeout in seconds for worker processes.
-        show_progress: Whether to show progress.
-    
-    Returns:
-        List of results in the same order as args_list.
-    
-    Example:
-        >>> def add(a, b):
-        ...     return a + b
-        >>> args_list = [(1, 2), (3, 4), (5, 6)]
-        >>> results = parallel_starmap(add, args_list)
-        >>> print(results)
-        [3, 7, 11]
-    """
-    if not args_list:
-        return []
-    
-    # Wrapper to unpack tuple arguments
-    def wrapper(args_tuple):
-        return func(*args_tuple)
-    
-    return parallel_map(
-        wrapper,
-        args_list,
-        num_workers=num_workers,
-        chunk_size=chunk_size,
-        timeout=timeout,
-        show_progress=show_progress,
-    )
 
 
 def get_optimal_worker_count(

@@ -18,7 +18,7 @@ from typing import Dict, Optional, Any, List, Tuple, Union
 
 from src.llm_utils import LLMServiceFactory, LLMModel, BaseLLMService
 from src.evaluation import constants
-from src.utils import parallel_map
+from src.utils import multiprocess_run
 from src.utils.constants import PARALLEL_PROCESSING_THRESHOLD
 from src.utils.logger import get_logger
 
@@ -761,7 +761,7 @@ class Evaluator:
         
         # Step 1: Parallel template formatting (CPU-bound)
         if use_parallel:
-            prompts = parallel_map(
+            prompts = multiprocess_run(
                 _prepare_harm_eval_prompt,
                 evaluations,
                 task_type="cpu",
@@ -779,7 +779,7 @@ class Evaluator:
             
             # Step 3: Parallel response processing (CPU-bound)
             if use_parallel:
-                return parallel_map(
+                return multiprocess_run(
                     _process_harm_result,
                     results,
                     task_type="cpu",
@@ -817,7 +817,7 @@ class Evaluator:
         
         # Step 1: Parallel template formatting (CPU-bound)
         if use_parallel:
-            prompts = parallel_map(
+            prompts = multiprocess_run(
                 _prepare_obedience_eval_prompt,
                 evaluations,
                 task_type="cpu",
@@ -835,7 +835,7 @@ class Evaluator:
             
             # Step 3: Parallel response processing (CPU-bound)
             if use_parallel:
-                return parallel_map(
+                return multiprocess_run(
                     _process_obedience_result,
                     results,
                     task_type="cpu",

@@ -15,7 +15,7 @@ from .constants import (
     MODELS_WITHOUT_TEMPERATURE_SUPPORT,
 )
 from ..utils.logger import get_logger
-from ..utils import parallel_map
+from ..utils import multiprocess_run
 from ..utils.constants import PARALLEL_PROCESSING_THRESHOLD
 
 logger = get_logger(__name__)
@@ -191,7 +191,7 @@ class OpenAIService(BaseLLMService):
             return [self._prepare_prompt(p, system_message) for p in prompts]
         
         # Use parallel processing for CPU-bound preparation
-        return parallel_map(
+        return multiprocess_run(
             self._prepare_prompt,
             prompts,
             task_type="cpu",
@@ -222,7 +222,7 @@ class OpenAIService(BaseLLMService):
             return [self._prepare_conversation(c) for c in conversations]
         
         # Use parallel processing for CPU-bound preparation (especially image encoding)
-        return parallel_map(
+        return multiprocess_run(
             self._prepare_conversation,
             conversations,
             task_type="cpu"

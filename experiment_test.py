@@ -14,7 +14,55 @@ from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-def run_scaled_experiment():
+def functionality_test():
+    """
+    Run a small FUNCTIONALITY TEST experiment (2 Tasks, 2 Prompts each).
+    Required by user request.
+    """
+    print("="*80)
+    print("FUNCTIONALITY TEST EXPERIMENT (2 Tasks, 2 Prompts)")
+    print("="*80)
+    
+    experiment = Experiment()
+    
+    # Configuration
+    PROMPT_IDS = (0, 2)  # Small subset for testing
+    EVALUATION_MODEL = LLMModel.GPT_5_NANO
+    STANDARD_MODEL = LLMModel.GPT_4O
+    
+    # Helper
+    def add(name, strategy, target):
+        experiment.add_task_to_tail(Task(
+            name=name,
+            processing_strategy=strategy,
+            target_model=target,
+            evaluation_model=EVALUATION_MODEL,
+            prompt_ids=PROMPT_IDS,
+            processing_model=STANDARD_MODEL
+        ))
+
+    # Add 2 test tasks
+    add("Test_SetTheory", ProcessorType.LLM_SET_THEORY, STANDARD_MODEL)
+    add("Test_Markov", ProcessorType.LLM_MARKOV_CHAIN, STANDARD_MODEL)
+    
+    # Execution
+    print(f"\n🚀 Launching Functionality Test...")
+    try:
+        results = experiment.run_experiment(parallel_tasks=True)
+    except KeyboardInterrupt:
+        print("\n🛑 Test interrupted by user.")
+        return
+
+    # Summary
+    print("\n" + "="*80)
+    print("📊 TEST RESULTS SUMMARY")
+    print("="*80)
+    for r in results:
+        score = r.get('statistics', {}).get('jailbreak', {}).get('average_obedience_score', 0.0)
+        print(f"Task: {r.get('task_name')} | Score: {score:.3f}")
+
+
+def experiment_test():
     """
     Run a SCALED comparative experiment (11 Tasks, 50 Prompts each).
     
@@ -160,4 +208,5 @@ def run_scaled_experiment():
     print(f"   Gemini 2.0 Flash: {get_score('19_Set_Gemini2.0Flash'):.3f}")
 
 if __name__ == "__main__":
-    run_scaled_experiment()
+    functionality_test()
+    # experiment_test()

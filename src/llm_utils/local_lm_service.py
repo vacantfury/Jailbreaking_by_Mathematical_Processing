@@ -23,7 +23,7 @@ from .constants import (
     DEFAULT_TOP_P,
 )
 from ..utils.logger import get_logger
-from ..utils import parallel_map
+from ..utils import multiprocess_run
 from ..utils.constants import PARALLEL_PROCESSING_THRESHOLD
 
 try:
@@ -196,7 +196,7 @@ class LocalLMService(BaseLLMService):
             return [self._prepare_prompt(p, system_message) for p in prompts]
         
         # Use parallel processing for CPU-bound preparation
-        return parallel_map(
+        return multiprocess_run(
             self._prepare_prompt,
             prompts,
             task_type="cpu",
@@ -410,7 +410,7 @@ class LocalLMService(BaseLLMService):
             return [self._prepare_conversation(c) for c in conversations]
         
         # Use parallel processing for CPU-bound preparation
-        return parallel_map(
+        return multiprocess_run(
             self._prepare_conversation,
             conversations,
             task_type="cpu"

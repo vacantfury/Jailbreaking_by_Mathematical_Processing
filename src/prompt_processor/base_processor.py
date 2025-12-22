@@ -6,7 +6,7 @@ from typing import Optional, List
 
 from src.llm_utils import LLMModel
 from src.utils.logger import get_logger
-from src.utils import parallel_map
+from src.utils import multiprocess_run
 from src.utils.constants import PARALLEL_PROCESSING_THRESHOLD
 
 logger = get_logger(__name__)
@@ -79,7 +79,7 @@ class BaseProcessor(ABC):
             try:
                 # Force sequential execution to avoid nested multiprocessing
                 # (since tasks are now executed in parallel)
-                results = parallel_map(
+                results = multiprocess_run(
                     self._process_with_error_handling,
                     prompts,
                     task_type="cpu",
