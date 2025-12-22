@@ -244,6 +244,13 @@ class ClaudeService(BaseLLMService):
                 response_text = response.content[0].text
                 results.append((prompt_id, response_text))
             except Exception as e:
+                # Check for fatal model errors (404 Not Found)
+                error_str = str(e).lower()
+                if "not found" in error_str or (hasattr(e, 'status_code') and e.status_code == 404):
+                    logger.critical(f"FATAL: Model ID {self.model.model_id} not found/unrecognized.")
+                    from src.utils.exceptions import FatalModelError
+                    raise FatalModelError(f"Model {self.model.model_id} not found") from e
+                
                 logger.error(f"Claude API error for prompt {prompt_id}: {str(e)}")
                 results.append((prompt_id, f"Error: {str(e)}"))
         
@@ -291,6 +298,13 @@ class ClaudeService(BaseLLMService):
                 response_text = response.content[0].text
                 results.append((conv_id, response_text))
             except Exception as e:
+                # Check for fatal model errors (404 Not Found)
+                error_str = str(e).lower()
+                if "not found" in error_str or (hasattr(e, 'status_code') and e.status_code == 404):
+                    logger.critical(f"FATAL: Model ID {self.model.model_id} not found/unrecognized.")
+                    from src.utils.exceptions import FatalModelError
+                    raise FatalModelError(f"Model {self.model.model_id} not found") from e
+                
                 logger.error(f"Claude API error for conversation {conv_id}: {str(e)}")
                 results.append((conv_id, f"Error: {str(e)}"))
         

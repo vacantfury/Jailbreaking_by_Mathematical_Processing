@@ -20,12 +20,7 @@ def _execute_task_safe(task_data):
     Must be at module level for multiprocessing pickling.
     
     Args:
-        task_data: Tuple or dict containing task configuration, NOT the initialized Task object.
-                   We'll rely on the Task class having a lazy initialization or we'll reconstruction it here.
-                   actually, to avoid changing Task class too much, let's assume we pass the Task object
-                   BUT the Task class must be modified to be pickleable (lazy init).
-                   
-                   If we can't change Task easily, we'll assume task_data is a dict of kwargs for Task().
+        task_data: Tuple or dict containing task configuration.
     """
     try:
         # If input is a dict (config), recreate Task
@@ -39,6 +34,13 @@ def _execute_task_safe(task_data):
         logger.info(f"Starting task: {task.name}")
         return task.run_task()
     except Exception as e:
+        # Check if it's a FatalModelError (by name or import to avoid circular dependency issues if possible)
+        # But easier to just import it inside the function or file
+        from src.utils.exceptions import FatalModelError
+        if isinstance(e, FatalModelError):
+            logger.critical(f"FATAL ERROR in task {getattr(task_data, 'name', 'unknown')}: {e}")
+            raise # Re-raise to terminate experiment
+            
         task_name = task_data.get('name', 'unknown') if isinstance(task_data, dict) else getattr(task_data, 'name', 'unknown')
         logger.error(f"Error executing task '{task_name}': {e}")
         import traceback
@@ -124,14 +126,14 @@ class Experiment:
             from src.utils.multiprocessor import parallel_map
             
             # Execute tasks in parallel
-            # We don't force sequential here, so it uses multiprocessing
-            # But prompt processing IS forced sequential in BaseProcessor
+            # We use handle_errors="raise" to support fatal termination
+            # But specific task errors are swallowed by _execute_task_safe unless they are FatalModelError
             self.results = parallel_map(
                 _execute_task_safe,
                 tasks_to_run,
                 task_type="cpu",
                 show_progress=True,
-                handle_errors="collect"  # Collect results/errors safely
+                handle_errors="raise"  # Terminate on FatalModelError
             )
             
             # Unpack results if handle_errors was 'collect'

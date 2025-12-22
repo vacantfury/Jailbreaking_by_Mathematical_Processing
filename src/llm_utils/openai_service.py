@@ -310,6 +310,13 @@ class OpenAIService(BaseLLMService):
                 results.append((prompt_id, response_text))
                 logger.debug(f"Completed request {idx}/{total} (ID: {prompt_id})")
             except Exception as e:
+                # Check for fatal model errors (404 Not Found)
+                error_str = str(e).lower()
+                if "not found" in error_str or "does not exist" in error_str or (hasattr(e, 'status_code') and e.status_code == 404):
+                    logger.critical(f"FATAL: Model ID {self.model.model_id} not found/unrecognized.")
+                    from src.utils.exceptions import FatalModelError
+                    raise FatalModelError(f"Model {self.model.model_id} not found") from e
+                    
                 error_msg = str(e)
                 logger.error(f"OpenAI API error for prompt {prompt_id} (request {idx}/{total}): {error_msg}")
                 results.append((prompt_id, f"Error: {error_msg}"))
@@ -396,6 +403,13 @@ class OpenAIService(BaseLLMService):
                 results.append((conv_id, response_text))
                 logger.debug(f"Completed conversation {idx}/{total} (ID: {conv_id})")
             except Exception as e:
+                # Check for fatal model errors (404 Not Found)
+                error_str = str(e).lower()
+                if "not found" in error_str or "does not exist" in error_str or (hasattr(e, 'status_code') and e.status_code == 404):
+                    logger.critical(f"FATAL: Model ID {self.model.model_id} not found/unrecognized.")
+                    from src.utils.exceptions import FatalModelError
+                    raise FatalModelError(f"Model {self.model.model_id} not found") from e
+                    
                 error_msg = str(e)
                 logger.error(f"OpenAI API error for conversation {conv_id} (request {idx}/{total}): {error_msg}")
                 results.append((conv_id, f"Error: {error_msg}"))

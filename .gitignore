@@ -34,7 +34,7 @@ ENV/
 *.swp
 *.swo
 .cursorignore
-.geminiignore
+
 
 # OS
 .DS_Store
@@ -45,6 +45,15 @@ src/others' codes/
 dependency_bug_fix/
 nu_rc_cluster_files/
 my_old_data_and_experiments/
-# experiment_data/
-# paper/
-# final_update_paper.py
+experiment_data/
+paper/
+final_update_paper.py
+
+# Ignored Temporary Files
+.claude/
+TODO.md
+TODO_old.md
+old_test.py
+test.py
+progress_report.md
+records and explanations.md

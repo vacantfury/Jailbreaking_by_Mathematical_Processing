@@ -138,6 +138,14 @@ class GoogleService(BaseLLMService):
                     
                 except Exception as e:
                     error_msg = str(e)
+                    error_str_lower = error_msg.lower()
+                    
+                    # Check for fatal model errors (404 Not Found)
+                    if "not found" in error_str_lower or "404" in error_msg:
+                        logger.critical(f"FATAL: Model ID {self.model.model_id} not found/unrecognized.")
+                        from src.utils.exceptions import FatalModelError
+                        raise FatalModelError(f"Model {self.model.model_id} not found") from e
+                    
                     if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg or "503" in error_msg or "UNAVAILABLE" in error_msg:
                         if attempt < max_retries:
                             wait_time = (2 ** attempt) + random.uniform(0, 1)
@@ -248,6 +256,14 @@ class GoogleService(BaseLLMService):
                 logger.debug(f"Completed conversation {idx}/{total} (ID: {conv_id})")
             except Exception as e:
                 error_msg = str(e)
+                error_str_lower = error_msg.lower()
+                
+                # Check for fatal model errors (404 Not Found)
+                if "not found" in error_str_lower or "404" in error_msg:
+                    logger.critical(f"FATAL: Model ID {self.model.model_id} not found/unrecognized.")
+                    from src.utils.exceptions import FatalModelError
+                    raise FatalModelError(f"Model {self.model.model_id} not found") from e
+                
                 logger.error(f"Google API error for conversation {conv_id} (request {idx}/{total}): {error_msg}")
                 results.append((conv_id, f"Error: {error_msg}"))
         

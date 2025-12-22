@@ -44,16 +44,16 @@ class LLMModel(Enum):
     CLAUDE_3_7_SONNET = ("claude-3-7-sonnet-20250219", Provider.ANTHROPIC) # Verified available
     
     # Placeholder for generic GPT-4 Nano if needed
-    GPT_4_NANO = ("gpt-4-nano", Provider.OPENAI)NTHROPIC) # Placeholder alias
-    CLAUDE_4_1_OPUS = ("claude-3-opus-latest", Provider.ANTHROPIC) # Placeholder alias
-    CLAUDE_4_5_SONNET = ("claude-3-5-sonnet-latest", Provider.ANTHROPIC) # Placeholder alias
+    GPT_4_NANO = ("gpt-4-nano", Provider.OPENAI)
+    CLAUDE_4_1_OPUS = ("claude-3-opus-20240229", Provider.ANTHROPIC) # Replaced latest
+    CLAUDE_4_5_SONNET = ("claude-3-5-sonnet-20241022", Provider.ANTHROPIC) # Replaced latest
     # cheapest among the newest claude models
-    CLAUDE_4_5_HAIKU = ("claude-3-5-haiku-latest", Provider.ANTHROPIC) # Placeholder alias
+    CLAUDE_4_5_HAIKU = ("claude-3-5-haiku-20241022", Provider.ANTHROPIC) # Replaced latest
     
-    # Using 'latest' aliases found in verification script
-    GEMINI_1_5_FLASH = ("gemini-flash-latest", Provider.GOOGLE)
-    GEMINI_1_5_FLASH_8B = ("gemini-flash-latest", Provider.GOOGLE) # Fallback, 8b not strictly listed
-    GEMINI_1_5_PRO = ("gemini-pro-latest", Provider.GOOGLE)
+    # Specific versions pinned to avoid 'latest' aliases
+    GEMINI_1_5_FLASH = ("gemini-1.5-flash-002", Provider.GOOGLE)
+    GEMINI_1_5_FLASH_8B = ("gemini-1.5-flash-8b-001", Provider.GOOGLE) 
+    GEMINI_1_5_PRO = ("gemini-1.5-pro-002", Provider.GOOGLE)
     GEMINI_2_0_FLASH = ("gemini-2.0-flash", Provider.GOOGLE)
     GEMINI_2_0_FLASH_LITE = ("gemini-2.0-flash-lite", Provider.GOOGLE)
     GEMINI_2_5_FLASH = ("gemini-2.5-flash", Provider.GOOGLE)
