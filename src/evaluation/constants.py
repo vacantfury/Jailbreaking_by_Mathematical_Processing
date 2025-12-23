@@ -6,7 +6,7 @@ from src.llm_utils import LLMModel
 # =============================================================================
 # Default Evaluation Model
 # =============================================================================
-DEFAULT_EVALUATION_MODEL = LLMModel.GPT_5_NANO  # Default model for evaluation
+DEFAULT_EVALUATION_MODEL = LLMModel.GPT_4O  # Default model for evaluation (HarmBench Standard)
 # Note: Temperature is handled by llm_utils defaults (DEFAULT_TEMPERATURE = 0.0)
 
 # =============================================================================

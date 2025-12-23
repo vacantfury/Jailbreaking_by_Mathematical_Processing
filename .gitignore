@@ -41,6 +41,7 @@ ENV/
 
 
 # custom
+other_repos/
 src/others' codes/
 dependency_bug_fix/
 nu_rc_cluster_files/
